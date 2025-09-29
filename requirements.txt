@@ -1,0 +1,21 @@
+# FastAPI Core Dependencies
+fastapi>=0.104.0,<0.110.0
+uvicorn[standard]>=0.24.0,<0.30.0
+gunicorn>=21.2.0,<22.0.0
+
+# Database Dependencies
+sqlalchemy>=2.0.0,<2.1.0
+aiomysql>=0.2.0,<0.3.0
+pymysql>=1.1.0,<1.2.0
+
+# Database Migration
+alembic>=1.12.0,<1.14.0
+
+# Data Validation
+pydantic>=2.5.0,<3.0.0
+
+# SSL/TLS Support for Azure Database for MySQL
+certifi>=2023.7.22
+
+# Production Utilities
+python-dotenv>=1.0.0,<2.0.0

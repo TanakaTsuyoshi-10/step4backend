@@ -1,0 +1,104 @@
+name: Deploy Backend to Azure App Service
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'requirements.txt'
+      - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.9'
+        cache: 'pip'
+
+    - name: Check repository contents
+      run: |
+        echo "=== Repository Root Contents ==="
+        ls -la
+        echo "=== Looking for requirements.txt ==="
+        find . -name "requirements.txt" -type f
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f "requirements.txt" ]; then
+          echo "✅ Found requirements.txt - installing dependencies"
+          pip install -r requirements.txt
+        else
+          echo "❌ requirements.txt not found - installing minimal dependencies"
+          pip install fastapi uvicorn sqlalchemy aiomysql pymysql pydantic certifi
+        fi
+
+    - name: Debug - show tree
+      run: |
+        echo "::group::REPOSITORY STRUCTURE"
+        echo "📁 Root directory contents:"
+        ls -la
+        echo "📁 App directory contents:"
+        ls -la app/
+        echo "📁 Complete file tree:"
+        find . -maxdepth 3 -type f | sort
+        echo "::endgroup::"
+
+    - name: Run basic validation
+      run: |
+        python -c "
+        import sys
+        sys.path.append('.')
+        try:
+            from app.main import app
+            from app.schemas import TaxCalculator
+            print('✅ Import validation successful')
+
+            # Test tax calculation
+            result = TaxCalculator.calculate_line_amounts(100, 2, '10')
+            assert result == (200, 20, 220), f'Tax calculation failed: {result}'
+            print('✅ Tax calculation test passed')
+
+        except Exception as e:
+            print(f'❌ Validation failed: {e}')
+            import traceback
+            traceback.print_exc()
+            exit(1)
+        "
+
+    - name: Create deployment package
+      run: |
+        zip -r backend.zip . -x ".git/*" -x ".github/*" -x "__pycache__/*" -x "*.pyc" -x ".venv/*" -x ".DS_Store"
+
+    - name: Deploy to Azure Web App
+      uses: azure/webapps-deploy@v3
+      with:
+        app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        package: backend.zip
+
+    - name: Verify deployment (health)
+      run: |
+        APP="${{ secrets.AZURE_WEBAPP_NAME }}"
+        URL="https://${APP}.azurewebsites.net/health"
+        echo "🔍 Checking health endpoint: $URL"
+
+        for i in {1..6}; do
+          if curl -fsS "$URL" | grep -q "healthy"; then
+            echo "✅ Health check passed"
+            exit 0
+          fi
+          echo "⏳ Retry $i/6 in 15s..."
+          sleep 15
+        done
+
+        echo "❌ Health check failed"
+        exit 1
