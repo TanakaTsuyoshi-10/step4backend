@@ -6,7 +6,7 @@ from decimal import Decimal
 
 # Product関連スキーマ
 class ProductBase(BaseModel):
-    code: int = Field(..., description="JAN/EANコード", ge=1, le=99999999999999999999999999)
+    code: str = Field(..., description="JAN/EANコード（8-25桁）", pattern=r"^[0-9]{8,25}$")
     name: str = Field(..., description="商品名", max_length=50)
     price: int = Field(..., description="税抜単価（円）", ge=0)
     tax_cd: str = Field("10", description="税区分", pattern="^(10|08|00)$")
@@ -98,7 +98,7 @@ class TradeResponse(BaseModel):
 class ProductNotFoundResponse(BaseModel):
     error: str = Field("Product not found", description="エラータイプ")
     message: str = Field("指定された商品コードは登録されていません", description="エラーメッセージ")
-    code: Optional[int] = Field(None, description="検索したコード")
+    code: Optional[str] = Field(None, description="検索したコード")
 
 
 class ValidationErrorResponse(BaseModel):

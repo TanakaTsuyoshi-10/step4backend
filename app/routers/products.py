@@ -1,8 +1,10 @@
 import logging
+import os
 from fastapi import APIRouter, Depends, HTTPException, Path
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
+from urllib.parse import urlparse
 
 from ..db import get_db
 from ..models import Product
@@ -16,6 +18,22 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# DB接続情報のマスク表示
+def mask_database_url() -> str:
+    """DATABASE_URLをマスクして安全に表示"""
+    db_url = os.getenv("DATABASE_URL", "")
+    if not db_url:
+        return "Not configured"
+
+    try:
+        parsed = urlparse(db_url)
+        # ホスト名とDB名のみ表示、他はマスク
+        host = parsed.hostname or "unknown"
+        db_name = parsed.path.lstrip('/') if parsed.path else "unknown"
+        return f"Host: {host}, DB: {db_name}"
+    except Exception:
+        return f"URL format: {db_url[:25]}..."
+
 
 @router.get(
     "/products/{code}",
@@ -28,14 +46,14 @@ router = APIRouter()
     description="JANコードまたは商品コードで商品マスタを検索します。"
 )
 async def get_product_by_code(
-    code: int = Path(..., description="商品コード/JANコード", ge=1, le=99999999999999999999999999),
+    code: str = Path(..., description="商品コード/JANコード（8-25桁）", regex=r"^[0-9]{8,25}$"),
     db: AsyncSession = Depends(get_db)
 ):
     """
     商品検索API
 
     Args:
-        code: 商品コード/JANコード（1-25桁）
+        code: 商品コード/JANコード（8-25桁の文字列）
         db: データベースセッション
 
     Returns:
@@ -45,25 +63,38 @@ async def get_product_by_code(
         HTTPException: 商品未登録（404）、サーバーエラー（500）
     """
     try:
-        logger.info(f"商品検索開始: code={code}")
+        # デバッグログ：受け取ったcodeとその型
+        logger.info(f"[BARCODE_LOOKUP] Received code='{code}' (type={type(code).__name__})")
+
+        # DB接続先情報をログ出力
+        logger.info(f"[BARCODE_LOOKUP] {mask_database_url()}")
+
+        # 前後空白の除去
+        code = code.strip()
+
+        logger.info(f"[BARCODE_LOOKUP] Executing query with code='{code}'")
 
         # 商品検索クエリ実行
         stmt = select(Product).where(Product.code == code)
         result = await db.execute(stmt)
         product = result.scalar_one_or_none()
 
+        # ヒット件数をログ出力
+        hit_count = 1 if product else 0
+        logger.info(f"[BARCODE_LOOKUP] Query result: {hit_count} hit(s)")
+
         if not product:
-            logger.warning(f"商品未登録: code={code}")
+            logger.warning(f"[BARCODE_LOOKUP] Product not found for code='{code}'")
             raise HTTPException(
                 status_code=404,
                 detail={
                     "error": "Product not found",
-                    "message": "指定された商品コードは登録されていません",
+                    "message": f"未登録商品です（コード: {code}）",
                     "code": code
                 }
             )
 
-        logger.info(f"商品検索成功: prd_id={product.prd_id}, name={product.name}")
+        logger.info(f"[BARCODE_LOOKUP] Found product: {product.name} (ID: {product.prd_id})")
         return ProductSchema.from_orm(product)
 
     except HTTPException:
@@ -71,17 +102,17 @@ async def get_product_by_code(
         raise
 
     except SQLAlchemyError as e:
-        logger.error(f"データベースエラー（商品検索）: {str(e)}", exc_info=True)
+        logger.error(f"[BARCODE_LOOKUP] Database error for code='{code}': {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail={
                 "error": "Database Error",
-                "message": "データベース処理中にエラーが発生しました"
+                "message": "商品データの取得中にエラーが発生しました"
             }
         )
 
     except Exception as e:
-        logger.error(f"予期しないエラー（商品検索）: {str(e)}", exc_info=True)
+        logger.error(f"[BARCODE_LOOKUP] Unexpected error for code='{code}': {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail={

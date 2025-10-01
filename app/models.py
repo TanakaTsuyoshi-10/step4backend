@@ -15,7 +15,7 @@ class Product(Base):
     __tablename__ = "products"
 
     prd_id = Column(Integer, primary_key=True, autoincrement=True, comment="商品一意ID")
-    code = Column(BigInteger, nullable=False, comment="JAN/EANコード（25桁まで）")
+    code = Column(String(25), nullable=False, comment="JAN/EANコード（25桁まで）")
     name = Column(String(50), nullable=False, comment="商品名")
     price = Column(Integer, nullable=False, comment="税抜単価（円）")
     tax_cd = Column(CHAR(2), nullable=False, default="10", comment="税区分")
