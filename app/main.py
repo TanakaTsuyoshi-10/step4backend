@@ -101,6 +101,8 @@ app = FastAPI(
 # CORS設定 - 本番環境用に制限
 allowed_origins = [
     "https://app-002-gen10-step3-2-py-oshima13.azurewebsites.net",  # 本番フロントエンド
+    "https://app-002-gen10-step3-1-node-oshima30.azurewebsites.net",  # 新フロントエンド
+    "https://app-002-gen10-step3-1-py-oshima30.azurewebsites.net",  # 新バックエンド（同一オリジン）
     "http://localhost:3000",  # 開発環境
     "http://127.0.0.1:3000",  # 開発環境
 ]
@@ -109,8 +111,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE"],
-    allow_headers=["Authorization", "Content-Type", "X-Correlation-ID"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # レート制限ミドルウェア
